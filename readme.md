@@ -64,7 +64,11 @@ The matcher module implements sophisticated cross-view correspondence:
 
 Key components:
 - **Epipolar Geometry**: Uses fundamental matrices for geometric constraints
-- **Cross-Distance Metric**: Combines point-to-line distances
+- **Cross-Distance Metric**: Normalized point-to-line distance measure
+  ```math
+  d_{cross} = \frac{|a_1x_1 + b_1y_1 + c_1|}{\sqrt{a_1^2 + b_1^2}(w_1 + h_1)} + \frac{|a_2x_2 + b_2y_2 + c_2|}{\sqrt{a_2^2 + b_2^2}(w_2 + h_2)}
+  ```
+  where $(x_i,y_i)$ are detection centroids, $(a_i,b_i,c_i)$ are epipolar line coefficients, and $(w_i,h_i)$ are bounding box dimensions.
 - **Match Filtering**: Handles ambiguous matches and outliers
 
 ### 2. 3D Reconstruction (triangulation.py)
@@ -193,3 +197,4 @@ Work in progress
 
 [⬆ Back to top](#-multi-camera-object-detection-and-3d-tracking-system)
 </div>
+````
