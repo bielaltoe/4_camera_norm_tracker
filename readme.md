@@ -6,8 +6,6 @@
 
 *Multi-camera tracking system in action: Shows simultaneous video feeds, detection graph, and 3D tracking visualization*
 
-<div align="center">
-
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-green.svg)](https://opencv.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.9+-red.svg)](https://pytorch.org)
