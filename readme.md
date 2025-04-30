@@ -36,7 +36,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/four-view-tracker.git
+git clone https://github.com/bielaltoe/4_camera_norm_tracker.git
 cd four-view-tracker
 
 # Create virtual environment
