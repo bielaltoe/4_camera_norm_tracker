@@ -37,7 +37,7 @@
 ```bash
 # Clone repository
 git clone https://github.com/bielaltoe/4_camera_norm_tracker.git
-cd four-view-tracker
+cd 4_camera_norm_tracker
 
 # Create virtual environment
 python -m venv venv
