@@ -59,6 +59,13 @@
 - 4 synchronized camera videos
 - Camera calibration files
 
+### Quick Start
+```bash
+# Clone repository
+git clone https://github.com/bielaltoe/4_camera_norm_tracker.git
+cd 4_camera_norm_tracker
+```
+
 ### Setup Instructions
 
 ```bash
