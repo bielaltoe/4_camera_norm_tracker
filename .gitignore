@@ -169,6 +169,17 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+four_view_tracker/main_images.py
+four_view_tracker/old_main.py
+four_view_tracker/old_matcher.py
+run_auto.sh
+tracking_error_report2.txt 
+tracking_error_report.txt
+experiments/
+videos/
+captures_clean/
+presentation.md
+error_reports/
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

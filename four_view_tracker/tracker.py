@@ -4,17 +4,18 @@ import numpy as np
 from ultralytics import YOLO
 
 from bbox_utils import get_centroid
-from config import CLASSES, CONFIDENCE
+from config import CONFIDENCE
 from detection import ObjectDetection
 
 
 class Tracker:
-    def __init__(self, yolo_trackers_list, cam_list):
+    def __init__(self, yolo_trackers_list, cam_list, class_list, yolo_confidence):
         self.cam_list = cam_list
         self.trackers = [YOLO(tracker) for tracker in yolo_trackers_list]
         self.results = []
         self.frames = None
-        self.classes = [CLASSES]
+        self.classes = class_list
+        self.confidence = yolo_confidence
 
         logging.info(f"--------- {yolo_trackers_list} Tracker initialized with {len(cam_list)} cameras ---------")
 
@@ -28,11 +29,12 @@ class Tracker:
                 persist=True,
                 classes=self.classes,
                 device="cuda:0",
-                conf=CONFIDENCE,
+                conf=self.confidence,
                 verbose=False,
                 show=False,
                 cls=True,
-            )
+                tracker="four_view_tracker/yolo_conf.yaml",
+                )
             self.results.append(result[0])
 
     def get_detections(self, show=False):

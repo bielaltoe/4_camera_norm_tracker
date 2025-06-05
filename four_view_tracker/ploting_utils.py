@@ -106,7 +106,7 @@ class Utils:
         ax_3d.set_xlim([-4, 4])
         ax_3d.set_ylim([-4, 4])
         ax_3d.set_zlim([0, 4])
-        ax_3d.legend(loc="upper right")
+        ax_3d.legend(loc="upper left")  # Mover legenda para canto superior esquerdo
 
     def rgb_to_bgr(self, color: tuple[int, int, int]) -> tuple[int, int, int]:
         """

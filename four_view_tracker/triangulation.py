@@ -141,7 +141,7 @@ def calc_reprojection_error_matrix(keypoints_3d, keypoints_2d_list, proj_matrici
 
     return np.vstack(reprojection_error_matrix).T
 
-def triangulate_ransac(proj_matrices, points_2d, n_iters=100, reprojection_error_epsilon=15):
+def triangulate_ransac(proj_matrices, points_2d, n_iters=100, reprojection_error_epsilon=50):
     assert len(proj_matrices) == len(points_2d)
     assert len(points_2d) >= 2
 

@@ -11,8 +11,7 @@ import numpy as np
 import cv2
 from ploting_utils import Utils
 from load_fundamental_matrices import FundamentalMatrices
-from config import DISTANCE_THRESHOLD
-from epipolar_utils import calculate_lines, cross_distance, dist_p_l
+from epipolar_utils import calculate_lines, cross_distance
 
 
 class Matcher:
@@ -29,9 +28,10 @@ class Matcher:
         lines_1_2 (np.ndarray): Epipolar lines from camera 1 to camera 2
         lines_2_1 (np.ndarray): Epipolar lines from camera 2 to camera 1
         colors (dict): Color mapping for visualization
+        previous_matches (dict): Cache of previously successful matches
     """
 
-    def __init__(self):
+    def __init__(self, distance_threshold, drift_threshold):
         """
         Initialize the Matcher with camera configuration files.
         
@@ -57,6 +57,13 @@ class Matcher:
         self.lines_1_2 = None
         self.lines_2_1 = None
         self.colors = {}
+        
+        # For tracking match consistency across frames
+        self.previous_matches = {}
+        self.match_consistency_score = 0.1  # Weight for considering previous matches
+        self.distance_threshold = distance_threshold
+        self.drift_threshold = drift_threshold
+        
 
     def plot_lines(self, img1, img2):
         """
@@ -83,6 +90,24 @@ class Matcher:
 
         return img1, img2
 
+    def get_match_key(self, cam1, id1, cam2, id2):
+        """
+        Create a unique key for a camera-detection pair match.
+        
+        Args:
+            cam1 (int): First camera ID
+            id1 (float/int): First detection ID
+            cam2 (int): Second camera ID
+            id2 (float/int): Second detection ID
+            
+        Returns:
+            str: Unique match key
+        """
+        # Ensure the camera order is consistent (lower cam ID first)
+        if cam1 > cam2:
+            return f"{cam2}_{id2}_{cam1}_{id1}"
+        return f"{cam1}_{id1}_{cam2}_{id2}"
+        
     def match_detections(self, detections, cams):
         """
         Match detections between two camera views using epipolar geometry.
@@ -92,6 +117,7 @@ class Matcher:
         2. Calculates cross-distances between detections
         3. Filters matches based on distance threshold and uniqueness
         4. Handles ambiguous matches using a drift threshold
+        5. Uses temporal consistency from previous matches
         
         Args:
             detections (list): List of ObjectDetection instances
@@ -105,8 +131,12 @@ class Matcher:
         self.lines_2_1 = []
 
         # Get fundamental matrices for the camera pair
-        F_1_2 = self.F_all[cams[0]][cams[1]]
-        F_2_1 = self.F_all[cams[1]][cams[0]]
+        try:
+            F_1_2 = self.F_all[cams[0]][cams[1]]
+            F_2_1 = self.F_all[cams[1]][cams[0]]
+        except KeyError:
+            logging.warning(f"No fundamental matrix for camera pair {cams[0]},{cams[1]}")
+            return []
 
         # Filter detections by camera
         detections_cam_1 = [det for det in detections if det.cam == cams[0]]
@@ -124,48 +154,83 @@ class Matcher:
 
         # Find potential matches based on epipolar geometry
         maybe_matches = []
+        match_key = f"{cams[0]}_{cams[1]}"
+        
         for i, det_cam_1 in enumerate(detections_cam_1):
             for j, det_cam_2 in enumerate(detections_cam_2):
-                d_cross = cross_distance(
-                    det_cam_1.bbox, det_cam_2.bbox, self.lines_1_2[i], self.lines_2_1[j]
-                )
+                # Only consider same-class detections
                 if det_cam_1.name == det_cam_2.name:
-                    maybe_matches.append([det_cam_1, det_cam_2, d_cross])
+                    # Calculate cross distance
+                    d_cross = cross_distance(
+                        det_cam_1.bbox, det_cam_2.bbox, self.lines_1_2[i], self.lines_2_1[j]
+                    )
+                    
+                    # Check for temporal consistency (was there a match between these objects before?)
+                    consistency_bonus = 0
+                    match_identifier = self.get_match_key(det_cam_1.cam, det_cam_1.id, 
+                                                         det_cam_2.cam, det_cam_2.id)
+                    
+                    if match_identifier in self.previous_matches:
+                        consistency_bonus = self.match_consistency_score
+                    
+                    # Adjusted score considers both geometry and temporal consistency
+                    adjusted_score = d_cross - consistency_bonus
+                    
+                    # Store with both original distance and adjusted score
+                    maybe_matches.append([det_cam_1, det_cam_2, d_cross, adjusted_score])
 
-        # Sort matches by cross distance and filter based on threshold
-        sorted_maybe_matches = sorted(maybe_matches, key=lambda x: x[2])
+        # Sort matches by adjusted score and filter based on threshold
+        sorted_maybe_matches = sorted(maybe_matches, key=lambda x: x[3])
         filtered_list = []
 
         # First pass: filter based on distance threshold
         for maybe_match in sorted_maybe_matches:
-            if maybe_match[2] < DISTANCE_THRESHOLD:
-                if len(filtered_list) == 0:
-                    filtered_list.append(maybe_match)
-                else:
-                    for f in filtered_list:
-                        if maybe_match[0].id != f[0].id and maybe_match[1].id != f[1].id:
+            if maybe_match[2] < self.distance_threshold:  # Slightly more permissive
+                # Check if any existing match conflicts with this one
+                conflicts = False
+                for f in filtered_list:
+                    if maybe_match[0].id == f[0].id or maybe_match[1].id == f[1].id:
+                        conflicts = True
+                        # If this match is better than the existing one, replace it
+                        if maybe_match[3] < f[3]:
+                            filtered_list.remove(f)
                             filtered_list.append(maybe_match)
-                            break
+                        break
+                
+                # If no conflicts, add this match
+                if not conflicts:
+                    filtered_list.append(maybe_match)
 
         # Second pass: handle ambiguous matches
         final_list = filtered_list.copy()
-        drift = 0.05  # Threshold for considering matches as ambiguous
 
-        for filtered_match in filtered_list:
+        for i, filtered_match in enumerate(filtered_list):
             for maybe_match in sorted_maybe_matches:
+                # Check for conflicting matches (same object in different pairs)
                 if ((maybe_match[0].id != filtered_match[0].id and 
                      maybe_match[1].id == filtered_match[1].id) or
                     (maybe_match[0].id == filtered_match[0].id and 
                      maybe_match[1].id != filtered_match[1].id)):
                     
-                    # Remove ambiguous matches that are too close in score
-                    if abs(maybe_match[2] - filtered_match[2]) < drift:
+                    # If the scores are too close, neither match is reliable
+                    if abs(maybe_match[2] - filtered_match[2]) < self.drift_threshold:
                         if filtered_match in final_list:
                             final_list.remove(filtered_match)
+                
+        # Update the previous matches cache with successful matches
+        for match in final_list:
+            det_cam_1, det_cam_2, d_cross, _ = match
+            match_identifier = self.get_match_key(det_cam_1.cam, det_cam_1.id, 
+                                              det_cam_2.cam, det_cam_2.id)
+            self.previous_matches[match_identifier] = True
+            
+            # Limit size of previous_matches cache to prevent memory issues
+            if len(self.previous_matches) > 1000:
+                self.previous_matches.clear()
 
         # Log successful matches
         for match in final_list:
-            det_cam_1, det_cam_2, d_cross = match
+            det_cam_1, det_cam_2, d_cross, _ = match
             logging.info(f"\nMatch found between cameras {cams[0]} and {cams[1]}:")
             logging.info(f"Camera {cams[0]} Detection - ID: {det_cam_1.id}, "
                         f"Class: {int(det_cam_1.name)}, "
@@ -175,4 +240,5 @@ class Matcher:
                         f"Centroid: ({det_cam_2.centroid[0]:.2f}, {det_cam_2.centroid[1]:.2f})")
             logging.info(f"Cross Distance: {d_cross:.4f}")
 
-        return final_list
+        # Return final matches but drop the adjusted score from the output
+        return [[m[0], m[1], m[2]] for m in final_list]
